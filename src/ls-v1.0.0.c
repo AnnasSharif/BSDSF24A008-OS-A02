@@ -10,6 +10,7 @@
 #include <getopt.h>
 
 #if defined(_WIN32) && !defined(__CYGWIN__)
+#include <windows.h>
 struct passwd { char *pw_name; };
 struct group { char *gr_name; };
 static inline struct passwd *getpwuid(int u) { (void)u; static struct passwd p = {"user"}; return &p; }
@@ -51,9 +52,28 @@ static inline struct group *getgrgid(int g) { (void)g; static struct group gr = 
 #ifndef S_IXOTH
 #define S_IXOTH 00001
 #endif
+static inline int get_terminal_width(void)
+{
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    if (GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi))
+    {
+        return csbi.srWindow.Right - csbi.srWindow.Left + 1;
+    }
+    return 80;
+}
 #else
 #include <pwd.h>
 #include <grp.h>
+#include <sys/ioctl.h>
+static inline int get_terminal_width(void)
+{
+    struct winsize w;
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == 0 && w.ws_col > 0)
+    {
+        return w.ws_col;
+    }
+    return 80;
+}
 #endif
 
 extern int errno;
@@ -125,6 +145,45 @@ void show_file_info(char *path, char *filename)
            filename);
 }
 
+void print_columns(char **files, int count, int max_len)
+{
+    if (count == 0)
+    {
+        return;
+    }
+
+    int term_width = get_terminal_width();
+    int col_width = max_len + 2;
+    int num_cols = term_width / col_width;
+
+    if (num_cols < 1)
+    {
+        num_cols = 1;
+    }
+
+    int num_rows = (count + num_cols - 1) / num_cols;
+
+    for (int r = 0; r < num_rows; r++)
+    {
+        for (int c = 0; c < num_cols; c++)
+        {
+            int index = r + c * num_rows;
+            if (index < count)
+            {
+                if (c == num_cols - 1 || index + num_rows >= count)
+                {
+                    printf("%s", files[index]);
+                }
+                else
+                {
+                    printf("%-*s", col_width, files[index]);
+                }
+            }
+        }
+        printf("\n");
+    }
+}
+
 void do_ls(char *dirname, int l_flag)
 {
     DIR *dp = opendir(dirname);
@@ -162,16 +221,13 @@ void do_ls(char *dirname, int l_flag)
         }
         printf("total %lld\n", total_blocks);
         rewinddir(dp);
-    }
 
-    errno = 0;
-    while ((entry = readdir(dp)) != NULL)
-    {
-        if (entry->d_name[0] == '.')
-            continue;
-
-        if (l_flag)
+        errno = 0;
+        while ((entry = readdir(dp)) != NULL)
         {
+            if (entry->d_name[0] == '.')
+                continue;
+
             if (strcmp(dirname, ".") == 0)
                 snprintf(path, sizeof(path), "%s", entry->d_name);
             else
@@ -179,15 +235,53 @@ void do_ls(char *dirname, int l_flag)
 
             show_file_info(path, entry->d_name);
         }
-        else
+
+        if (errno != 0)
         {
-            printf("%s\n", entry->d_name);
+            perror("readdir failed");
         }
     }
-
-    if (errno != 0)
+    else
     {
-        perror("readdir failed");
+        char **files = NULL;
+        int count = 0;
+        int capacity = 0;
+        int max_len = 0;
+
+        errno = 0;
+        while ((entry = readdir(dp)) != NULL)
+        {
+            if (entry->d_name[0] == '.')
+                continue;
+
+            if (count >= capacity)
+            {
+                capacity = (capacity == 0) ? 16 : capacity * 2;
+                files = realloc(files, capacity * sizeof(char *));
+            }
+
+            files[count] = malloc(strlen(entry->d_name) + 1);
+            strcpy(files[count], entry->d_name);
+            int len = strlen(entry->d_name);
+            if (len > max_len)
+            {
+                max_len = len;
+            }
+            count++;
+        }
+
+        if (errno != 0)
+        {
+            perror("readdir failed");
+        }
+
+        print_columns(files, count, max_len);
+
+        for (int i = 0; i < count; i++)
+        {
+            free(files[i]);
+        }
+        free(files);
     }
 
     closedir(dp);
@@ -234,5 +328,3 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
-

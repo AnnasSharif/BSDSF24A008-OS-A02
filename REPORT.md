@@ -38,3 +38,32 @@ If the bitwise AND operation (st_mode & S_IRUSR) returns a non-zero value, the r
 
 3. Special Bits:
 Special bits like SetUID (S_ISUID), SetGID (S_ISGID), and Sticky bit (S_ISVTX) are also checked using the bitwise AND operator (&) to determine if 's', 'S', 't', or 'T' should be printed instead of 'x'.
+
+---
+
+## Feature-3: ls-v1.2.0 – Column Display (Down Then Across)
+
+### Question 1: Explain the general logic for printing items in a "down then across" columnar format. Why is a simple single loop through the list of filenames insufficient for this task?
+
+#### Answer:
+In a terminal, text is output line by line from left to right. Once a newline is printed, the cursor moves down and cannot move back up to fill previous lines.
+
+In "down then across" format, filenames are listed downwards in column 1, then downwards in column 2, and so on. Because printing happens row by row:
+1. We calculate the number of columns that can fit based on the terminal width and the longest filename plus spacing.
+2. We calculate the number of rows needed by dividing total files by the number of columns.
+3. For each row r, we print item r from column 0, item (r + num_rows) from column 1, item (r + 2 * num_rows) from column 2, and so on across the line.
+
+A simple single loop through the filenames is insufficient because it prints files sequentially across the line, rather than down each column.
+
+---
+
+### Question 2: What is the purpose of the ioctl system call in this context? What would be the limitations of your program if you only used a fixed-width fallback (e.g., 80 columns) instead of detecting the terminal size?
+
+#### Answer:
+The ioctl system call with the TIOCGWINSZ request is used to get the current width (number of columns) of the terminal window directly from the terminal device driver.
+
+If the program only used a fixed-width fallback of 80 columns:
+1. On wider screens, the program would waste screen space by squeezing the files into 80 columns instead of using the available area.
+2. On narrower screens (like smaller windows or split terminals), lines longer than the window would wrap around awkwardly, breaking the columns and making the output unreadable.
+
+Using ioctl allows the program to automatically adjust its column layout to any terminal size.
