@@ -78,6 +78,13 @@ static inline int get_terminal_width(void)
 
 extern int errno;
 
+int compare_names(const void *a, const void *b)
+{
+    const char *name1 = *(const char **)a;
+    const char *name2 = *(const char **)b;
+    return strcmp(name1, name2);
+}
+
 void get_permissions(mode_t mode, char *str)
 {
     strcpy(str, "----------");
@@ -219,20 +226,56 @@ void do_ls(char *dirname, int mode)
     }
 
     struct dirent *entry;
-    char path[1024];
+    char **files = NULL;
+    int count = 0;
+    int capacity = 0;
+    int max_len = 0;
+
+    errno = 0;
+    while ((entry = readdir(dp)) != NULL)
+    {
+        if (entry->d_name[0] == '.')
+            continue;
+
+        if (count >= capacity)
+        {
+            capacity = (capacity == 0) ? 16 : capacity * 2;
+            files = realloc(files, capacity * sizeof(char *));
+        }
+
+        files[count] = malloc(strlen(entry->d_name) + 1);
+        strcpy(files[count], entry->d_name);
+        int len = strlen(entry->d_name);
+        if (len > max_len)
+        {
+            max_len = len;
+        }
+        count++;
+    }
+
+    if (errno != 0)
+    {
+        perror("readdir failed");
+    }
+
+    closedir(dp);
+
+    if (count > 0)
+    {
+        qsort(files, count, sizeof(char *), compare_names);
+    }
 
     if (mode == 1)
     {
         long long total_blocks = 0;
-        while ((entry = readdir(dp)) != NULL)
-        {
-            if (entry->d_name[0] == '.')
-                continue;
+        char path[1024];
 
+        for (int i = 0; i < count; i++)
+        {
             if (strcmp(dirname, ".") == 0)
-                snprintf(path, sizeof(path), "%s", entry->d_name);
+                snprintf(path, sizeof(path), "%s", files[i]);
             else
-                snprintf(path, sizeof(path), "%s/%s", dirname, entry->d_name);
+                snprintf(path, sizeof(path), "%s/%s", dirname, files[i]);
 
             struct stat st;
             if (lstat(path, &st) == 0)
@@ -245,78 +288,31 @@ void do_ls(char *dirname, int mode)
             }
         }
         printf("total %lld\n", total_blocks);
-        rewinddir(dp);
-
-        errno = 0;
-        while ((entry = readdir(dp)) != NULL)
-        {
-            if (entry->d_name[0] == '.')
-                continue;
-
-            if (strcmp(dirname, ".") == 0)
-                snprintf(path, sizeof(path), "%s", entry->d_name);
-            else
-                snprintf(path, sizeof(path), "%s/%s", dirname, entry->d_name);
-
-            show_file_info(path, entry->d_name);
-        }
-
-        if (errno != 0)
-        {
-            perror("readdir failed");
-        }
-    }
-    else
-    {
-        char **files = NULL;
-        int count = 0;
-        int capacity = 0;
-        int max_len = 0;
-
-        errno = 0;
-        while ((entry = readdir(dp)) != NULL)
-        {
-            if (entry->d_name[0] == '.')
-                continue;
-
-            if (count >= capacity)
-            {
-                capacity = (capacity == 0) ? 16 : capacity * 2;
-                files = realloc(files, capacity * sizeof(char *));
-            }
-
-            files[count] = malloc(strlen(entry->d_name) + 1);
-            strcpy(files[count], entry->d_name);
-            int len = strlen(entry->d_name);
-            if (len > max_len)
-            {
-                max_len = len;
-            }
-            count++;
-        }
-
-        if (errno != 0)
-        {
-            perror("readdir failed");
-        }
-
-        if (mode == 2)
-        {
-            print_horizontal(files, count, max_len);
-        }
-        else
-        {
-            print_columns(files, count, max_len);
-        }
 
         for (int i = 0; i < count; i++)
         {
-            free(files[i]);
+            if (strcmp(dirname, ".") == 0)
+                snprintf(path, sizeof(path), "%s", files[i]);
+            else
+                snprintf(path, sizeof(path), "%s/%s", dirname, files[i]);
+
+            show_file_info(path, files[i]);
         }
-        free(files);
+    }
+    else if (mode == 2)
+    {
+        print_horizontal(files, count, max_len);
+    }
+    else
+    {
+        print_columns(files, count, max_len);
     }
 
-    closedir(dp);
+    for (int i = 0; i < count; i++)
+    {
+        free(files[i]);
+    }
+    free(files);
 }
 
 int main(int argc, char *argv[])

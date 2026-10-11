@@ -96,3 +96,28 @@ During argument parsing with getopt(), if -l is encountered, mode is set to 1. I
 This mode integer is passed to the do_ls() function:
 - If mode is 1, do_ls() gathers file metadata and prints the detailed long format.
 - If mode is not 1, do_ls() reads the filenames into a dynamic array and checks the mode: if mode is 2, it calls the horizontal display function print_horizontal(); otherwise, it calls the default vertical display function print_columns().
+
+---
+
+## Feature-5: ls-v1.4.0 – Alphabetical Sort
+
+### Question 1: Why is it necessary to read all directory entries into memory before you can sort them? What are the potential drawbacks of this approach for directories containing millions of files?
+
+#### Answer:
+A sorting algorithm needs to compare elements and rearrange them in order. System calls like readdir() only return one entry at a time in whatever order the file system stores them on disk. Because we cannot know which file comes first alphabetically without seeing all entries, we must read all filenames into memory before sorting.
+
+The drawbacks of this approach for directories with millions of files are:
+1. High Memory Consumption: Storing millions of filename strings in memory requires significant RAM. If memory runs out, the program can crash.
+2. Output Delay: The program cannot show any output until all files are read into memory and sorted. The user must wait before seeing any results.
+
+---
+
+### Question 2: Explain the purpose and signature of the comparison function required by qsort(). How does it work, and why must it take const void * arguments?
+
+#### Answer:
+The purpose of the comparison function is to tell qsort() the ordering logic between two elements. Because qsort() is a generic sorting function that can sort any data type, it does not know the specific type of data it is sorting.
+
+The signature is int comparison_function(const void *a, const void *b).
+1. It takes const void * arguments because void * is a generic pointer in C that can point to any data type. This allows qsort() to work with arrays of any type. The const keyword ensures that the comparison function will not modify the data.
+2. Inside the function, the void pointers are cast to pointers of the actual element type. For an array of strings (char *), the elements are pointers, so the arguments are cast to char **.
+3. The function returns a negative number if the first item should come before the second, zero if they are equal, and a positive number if the first item should come after the second. For strings, strcmp() is used to return this comparison result.
