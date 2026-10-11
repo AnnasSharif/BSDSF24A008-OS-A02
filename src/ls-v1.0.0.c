@@ -184,7 +184,32 @@ void print_columns(char **files, int count, int max_len)
     }
 }
 
-void do_ls(char *dirname, int l_flag)
+void print_horizontal(char **files, int count, int max_len)
+{
+    if (count == 0)
+    {
+        return;
+    }
+
+    int term_width = get_terminal_width();
+    int col_width = max_len + 2;
+    int current_pos = 0;
+
+    for (int i = 0; i < count; i++)
+    {
+        if (current_pos + col_width > term_width && current_pos > 0)
+        {
+            printf("\n");
+            current_pos = 0;
+        }
+
+        printf("%-*s", col_width, files[i]);
+        current_pos += col_width;
+    }
+    printf("\n");
+}
+
+void do_ls(char *dirname, int mode)
 {
     DIR *dp = opendir(dirname);
     if (dp == NULL)
@@ -196,7 +221,7 @@ void do_ls(char *dirname, int l_flag)
     struct dirent *entry;
     char path[1024];
 
-    if (l_flag)
+    if (mode == 1)
     {
         long long total_blocks = 0;
         while ((entry = readdir(dp)) != NULL)
@@ -275,7 +300,14 @@ void do_ls(char *dirname, int l_flag)
             perror("readdir failed");
         }
 
-        print_columns(files, count, max_len);
+        if (mode == 2)
+        {
+            print_horizontal(files, count, max_len);
+        }
+        else
+        {
+            print_columns(files, count, max_len);
+        }
 
         for (int i = 0; i < count; i++)
         {
@@ -289,25 +321,29 @@ void do_ls(char *dirname, int l_flag)
 
 int main(int argc, char *argv[])
 {
-    int l_flag = 0;
+    int mode = 0;
     int opt;
 
-    while ((opt = getopt(argc, argv, "l")) != -1)
+    while ((opt = getopt(argc, argv, "lx")) != -1)
     {
         if (opt == 'l')
         {
-            l_flag = 1;
+            mode = 1;
+        }
+        else if (opt == 'x')
+        {
+            mode = 2;
         }
         else
         {
-            fprintf(stderr, "Usage: %s [-l] [directory...]\n", argv[0]);
+            fprintf(stderr, "Usage: %s [-l] [-x] [directory...]\n", argv[0]);
             exit(1);
         }
     }
 
     if (optind == argc)
     {
-        do_ls(".", l_flag);
+        do_ls(".", mode);
     }
     else
     {
@@ -318,7 +354,7 @@ int main(int argc, char *argv[])
             {
                 printf("%s:\n", argv[i]);
             }
-            do_ls(argv[i], l_flag);
+            do_ls(argv[i], mode);
             if (multiple && i < argc - 1)
             {
                 puts("");

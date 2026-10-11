@@ -67,3 +67,32 @@ If the program only used a fixed-width fallback of 80 columns:
 2. On narrower screens (like smaller windows or split terminals), lines longer than the window would wrap around awkwardly, breaking the columns and making the output unreadable.
 
 Using ioctl allows the program to automatically adjust its column layout to any terminal size.
+
+---
+
+## Feature-4: ls-v1.3.0 – Horizontal Column Display (-x Option)
+
+### Question 1: Compare the implementation complexity of the "down then across" (vertical) printing logic versus the "across" (horizontal) printing logic. Which one requires more pre-calculation and why?
+
+#### Answer:
+The "down then across" (vertical) printing logic requires significantly more pre-calculation than the "across" (horizontal) logic.
+
+1. "Down then across" requires calculating both the total number of columns and the total number of rows beforehand. Because the terminal can only print row by row, the program must calculate the exact array index for each column in every row (using the formula: index = row + column * num_rows). If this math is slightly off, files will appear in the wrong positions or exceed array bounds.
+
+2. In contrast, the "across" (horizontal) logic is much simpler. It loops through the filenames sequentially from left to right. It only needs to know the column width and terminal width. As it prints each file, it keeps track of the horizontal position. When adding another column would exceed the screen width, it simply prints a newline character and resets the position to zero. No row calculations or non-linear index jumps are needed.
+
+---
+
+### Question 2: Describe the strategy you used in your code to manage the different display modes (-l, -x, and default). How did your program decide which function to call for printing?
+
+#### Answer:
+In the program, an integer variable named mode is used in the main function to track the selected display mode:
+- Mode 0 represents the default vertical column display ("down then across").
+- Mode 1 represents the long listing format (-l).
+- Mode 2 represents the horizontal column display (-x).
+
+During argument parsing with getopt(), if -l is encountered, mode is set to 1. If -x is encountered, mode is set to 2.
+
+This mode integer is passed to the do_ls() function:
+- If mode is 1, do_ls() gathers file metadata and prints the detailed long format.
+- If mode is not 1, do_ls() reads the filenames into a dynamic array and checks the mode: if mode is 2, it calls the horizontal display function print_horizontal(); otherwise, it calls the default vertical display function print_columns().
