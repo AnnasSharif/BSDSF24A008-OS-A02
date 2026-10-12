@@ -121,3 +121,26 @@ The signature is int comparison_function(const void *a, const void *b).
 1. It takes const void * arguments because void * is a generic pointer in C that can point to any data type. This allows qsort() to work with arrays of any type. The const keyword ensures that the comparison function will not modify the data.
 2. Inside the function, the void pointers are cast to pointers of the actual element type. For an array of strings (char *), the elements are pointers, so the arguments are cast to char **.
 3. The function returns a negative number if the first item should come before the second, zero if they are equal, and a positive number if the first item should come after the second. For strings, strcmp() is used to return this comparison result.
+
+---
+
+## Feature-6: ls-v1.5.0 – Colorized Output Based on File Type
+
+### Question 1: How do ANSI escape codes work to produce color in a standard Linux terminal? Show the specific code sequence for printing text in green.
+
+#### Answer:
+ANSI escape codes are special sequences of characters that begin with an Escape character (octal \033 or ASCII 27) followed by a bracket '['. When the terminal encounters this sequence in the output stream, it does not display the characters on the screen. Instead, it interprets them as a command to change display formatting such as foreground color, background color, or text style.
+
+To print text in green, the specific escape sequence is \033[0;32m. The '0;' indicates normal text style and '32m' sets the foreground text color to green. After printing the text, the sequence \033[0m is printed to reset the terminal color back to default so following text is unaffected.
+
+---
+
+### Question 2: To color an executable file, you need to check its permission bits. Explain which bits in the st_mode field you need to check to determine if a file is executable by the owner, group, or others.
+
+#### Answer:
+In the st_mode field of struct stat, execute permissions are represented by three separate bits:
+1. S_IXUSR: The execute bit for the owner (user).
+2. S_IXGRP: The execute bit for the group.
+3. S_IXOTH: The execute bit for others.
+
+To determine if a file is executable by anyone, we combine these three macros using the bitwise OR operator (S_IXUSR | S_IXGRP | S_IXOTH) and check it against st_mode using the bitwise AND operator (&). If the result is non-zero, at least one execute permission bit is active, meaning the file is executable and should be displayed in green.

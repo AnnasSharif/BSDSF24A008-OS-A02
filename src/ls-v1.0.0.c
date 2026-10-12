@@ -78,6 +78,48 @@ static inline int get_terminal_width(void)
 
 extern int errno;
 
+#define COLOR_RESET "\033[0m"
+#define COLOR_BLUE "\033[0;34m"
+#define COLOR_GREEN "\033[0;32m"
+#define COLOR_RED "\033[0;31m"
+#define COLOR_PINK "\033[0;35m"
+#define COLOR_REVERSE "\033[7m"
+
+void print_colored_name(const char *name, mode_t mode)
+{
+    const char *color = NULL;
+
+    if (S_ISLNK(mode))
+    {
+        color = COLOR_PINK;
+    }
+    else if (S_ISDIR(mode))
+    {
+        color = COLOR_BLUE;
+    }
+    else if (S_ISCHR(mode) || S_ISBLK(mode) || S_ISSOCK(mode) || S_ISFIFO(mode))
+    {
+        color = COLOR_REVERSE;
+    }
+    else if (strstr(name, ".tar") != NULL || strstr(name, ".gz") != NULL || strstr(name, ".zip") != NULL)
+    {
+        color = COLOR_RED;
+    }
+    else if (mode & (S_IXUSR | S_IXGRP | S_IXOTH))
+    {
+        color = COLOR_GREEN;
+    }
+
+    if (color != NULL)
+    {
+        printf("%s%s%s", color, name, COLOR_RESET);
+    }
+    else
+    {
+        printf("%s", name);
+    }
+}
+
 int compare_names(const void *a, const void *b)
 {
     const char *name1 = *(const char **)a;
@@ -142,17 +184,18 @@ void show_file_info(char *path, char *filename)
         strcpy(formatted_time, "??? ?? ??:??");
     }
 
-    printf("%s %2ld %-8s %-8s %8lld %s %s\n",
+    printf("%s %2ld %-8s %-8s %8lld %s ",
            modestr,
            (long)info.st_nlink,
            user,
            group,
            (long long)info.st_size,
-           formatted_time,
-           filename);
+           formatted_time);
+    print_colored_name(filename, info.st_mode);
+    printf("\n");
 }
 
-void print_columns(char **files, int count, int max_len)
+void print_columns(const char *dirname, char **files, int count, int max_len)
 {
     if (count == 0)
     {
@@ -177,13 +220,28 @@ void print_columns(char **files, int count, int max_len)
             int index = r + c * num_rows;
             if (index < count)
             {
-                if (c == num_cols - 1 || index + num_rows >= count)
-                {
-                    printf("%s", files[index]);
-                }
+                char path[1024];
+                if (strcmp(dirname, ".") == 0)
+                    snprintf(path, sizeof(path), "%s", files[index]);
                 else
+                    snprintf(path, sizeof(path), "%s/%s", dirname, files[index]);
+
+                struct stat st;
+                mode_t mode = 0;
+                if (lstat(path, &st) == 0)
                 {
-                    printf("%-*s", col_width, files[index]);
+                    mode = st.st_mode;
+                }
+
+                print_colored_name(files[index], mode);
+
+                if (c < num_cols - 1 && index + num_rows < count)
+                {
+                    int padding = col_width - (int)strlen(files[index]);
+                    for (int p = 0; p < padding; p++)
+                    {
+                        putchar(' ');
+                    }
                 }
             }
         }
@@ -191,7 +249,7 @@ void print_columns(char **files, int count, int max_len)
     }
 }
 
-void print_horizontal(char **files, int count, int max_len)
+void print_horizontal(const char *dirname, char **files, int count, int max_len)
 {
     if (count == 0)
     {
@@ -210,7 +268,25 @@ void print_horizontal(char **files, int count, int max_len)
             current_pos = 0;
         }
 
-        printf("%-*s", col_width, files[i]);
+        char path[1024];
+        if (strcmp(dirname, ".") == 0)
+            snprintf(path, sizeof(path), "%s", files[i]);
+        else
+            snprintf(path, sizeof(path), "%s/%s", dirname, files[i]);
+
+        struct stat st;
+        mode_t mode = 0;
+        if (lstat(path, &st) == 0)
+        {
+            mode = st.st_mode;
+        }
+
+        print_colored_name(files[i], mode);
+        int padding = col_width - (int)strlen(files[i]);
+        for (int p = 0; p < padding; p++)
+        {
+            putchar(' ');
+        }
         current_pos += col_width;
     }
     printf("\n");
@@ -301,11 +377,11 @@ void do_ls(char *dirname, int mode)
     }
     else if (mode == 2)
     {
-        print_horizontal(files, count, max_len);
+        print_horizontal(dirname, files, count, max_len);
     }
     else
     {
-        print_columns(files, count, max_len);
+        print_columns(dirname, files, count, max_len);
     }
 
     for (int i = 0; i < count; i++)
@@ -317,6 +393,15 @@ void do_ls(char *dirname, int mode)
 
 int main(int argc, char *argv[])
 {
+#if defined(_WIN32) && !defined(__CYGWIN__)
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    DWORD dwMode = 0;
+    if (GetConsoleMode(hOut, &dwMode))
+    {
+        SetConsoleMode(hOut, dwMode | 0x0004);
+    }
+#endif
+
     int mode = 0;
     int opt;
 
