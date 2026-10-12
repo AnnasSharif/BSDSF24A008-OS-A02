@@ -292,8 +292,13 @@ void print_horizontal(const char *dirname, char **files, int count, int max_len)
     printf("\n");
 }
 
-void do_ls(char *dirname, int mode)
+void do_ls(char *dirname, int mode, int recursive)
 {
+    if (recursive)
+    {
+        printf("%s:\n", dirname);
+    }
+
     DIR *dp = opendir(dirname);
     if (dp == NULL)
     {
@@ -384,6 +389,28 @@ void do_ls(char *dirname, int mode)
         print_columns(dirname, files, count, max_len);
     }
 
+    if (recursive)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            if (strcmp(files[i], ".") == 0 || strcmp(files[i], "..") == 0)
+                continue;
+
+            char path[1024];
+            if (strcmp(dirname, ".") == 0)
+                snprintf(path, sizeof(path), "./%s", files[i]);
+            else
+                snprintf(path, sizeof(path), "%s/%s", dirname, files[i]);
+
+            struct stat st;
+            if (lstat(path, &st) == 0 && S_ISDIR(st.st_mode))
+            {
+                printf("\n");
+                do_ls(path, mode, recursive);
+            }
+        }
+    }
+
     for (int i = 0; i < count; i++)
     {
         free(files[i]);
@@ -403,9 +430,10 @@ int main(int argc, char *argv[])
 #endif
 
     int mode = 0;
+    int recursive = 0;
     int opt;
 
-    while ((opt = getopt(argc, argv, "lx")) != -1)
+    while ((opt = getopt(argc, argv, "lxR")) != -1)
     {
         if (opt == 'l')
         {
@@ -415,27 +443,31 @@ int main(int argc, char *argv[])
         {
             mode = 2;
         }
+        else if (opt == 'R')
+        {
+            recursive = 1;
+        }
         else
         {
-            fprintf(stderr, "Usage: %s [-l] [-x] [directory...]\n", argv[0]);
+            fprintf(stderr, "Usage: %s [-l] [-x] [-R] [directory...]\n", argv[0]);
             exit(1);
         }
     }
 
     if (optind == argc)
     {
-        do_ls(".", mode);
+        do_ls(".", mode, recursive);
     }
     else
     {
         int multiple = (argc - optind > 1);
         for (int i = optind; i < argc; i++)
         {
-            if (multiple)
+            if (multiple && !recursive)
             {
                 printf("%s:\n", argv[i]);
             }
-            do_ls(argv[i], mode);
+            do_ls(argv[i], mode, recursive);
             if (multiple && i < argc - 1)
             {
                 puts("");

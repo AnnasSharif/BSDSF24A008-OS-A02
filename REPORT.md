@@ -144,3 +144,29 @@ In the st_mode field of struct stat, execute permissions are represented by thre
 3. S_IXOTH: The execute bit for others.
 
 To determine if a file is executable by anyone, we combine these three macros using the bitwise OR operator (S_IXUSR | S_IXGRP | S_IXOTH) and check it against st_mode using the bitwise AND operator (&). If the result is non-zero, at least one execute permission bit is active, meaning the file is executable and should be displayed in green.
+
+---
+
+## Feature-7: ls-v1.6.0 – Recursive Listing (-R Option)
+
+### Question 1: In a recursive function, what is a "base case"? In the context of your recursive ls, what is the base case that stops the recursion from continuing forever?
+
+#### Answer:
+In a recursive function, a base case is a stopping condition that prevents the function from calling itself any further, allowing the call stack to unwind and return normally.
+
+In the context of our recursive ls utility, the base cases that stop recursion are:
+1. Reaching a leaf directory that contains no subdirectories (it only contains regular files or is empty). When the loop checks for directories inside it, none are found, so no further recursive calls are made and the function returns.
+2. Explicitly skipping the "." (current directory) and ".." (parent directory) entries. Without skipping these, the function would endlessly re-enter the same directory or its parent in an infinite loop.
+3. If opendir() fails to open a directory (such as due to restricted permissions or if the directory does not exist), the function prints an error message and returns immediately without making any recursive calls.
+
+---
+
+### Question 2: Explain why it is essential to construct a full path (e.g., "parent_dir/subdir") before making a recursive call. What would happen if you simply called do_ls("subdir") from within the do_ls("parent_dir") function call?
+
+#### Answer:
+It is essential to construct the full relative path because file system calls such as opendir() and lstat() always interpret relative paths starting from the current working directory where the program was launched, not from the directory currently being listed.
+
+If we called do_ls("subdir") directly from within do_ls("parent_dir"):
+1. The program would look for "subdir" in the current working directory instead of looking inside "parent_dir".
+2. Unless a directory with the exact same name happened to exist in the root working directory, opendir("subdir") would fail with a "Cannot open directory: No such file or directory" error.
+3. By constructing the full path as "parent_dir/subdir", we provide the operating system with the complete relative path to traverse and open the subdirectory correctly.
